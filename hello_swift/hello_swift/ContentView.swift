@@ -8,6 +8,9 @@
 import SwiftUI
 
 /*
+ iOS: App Sandbox is enabled defautly.
+
+ macOS:
  project navigator / Targets / Signing & Capabilities / App Sandbox:
     User Selected File: Read/Write;
     Downloads Folder: Read/Write;
@@ -28,15 +31,18 @@ struct ContentView: View {
             Button("Button2") { hello2() }
         }.frame(minWidth: 300, minHeight: 300)
     }
-    
+
     func hello2(){
-        //Sandbox: Downloads Folder, ~/Downloads
-        let dir = FileManager.default.urls(for: .downloadsDirectory,
+        //Sandbox: Documents, Downloads Folder
+
+        // https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide
+        let dir = FileManager.default.urls(for: .documentDirectory,
                                            in: .userDomainMask).first!
+
         let file = dir.appendingPathComponent("hello.txt")
         hello(file: file.path)
     }
-    
+
     func hello(file: String){
         var fp = fopen(file, "a")
         if fp == nil {
