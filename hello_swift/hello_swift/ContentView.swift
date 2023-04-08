@@ -1,11 +1,5 @@
-//
-//  ContentView.swift
-//  hello_swift
-//
-//  Created by ljh on 4/1/23.
-//
-
 import SwiftUI
+import UniformTypeIdentifiers
 
 /*
  iOS: App Sandbox is enabled defautly.
@@ -17,53 +11,123 @@ import SwiftUI
  */
 
 struct ContentView: View {
-    @State private var fileDialogShown: Bool = false
+    @State private var isPresented: Bool = false
+    @State var content = ""
+    
     var body: some View {
-        HStack {
-            Button("Button1") { fileDialogShown = true }
-                .fileImporter(isPresented: $fileDialogShown,
-                              allowedContentTypes: [.plainText])
-                { result in
-                    guard let file = try? result.get() else { return }
-                    //Sandbox: User Selected File
-                    hello(file: file.path)
+        VStack {
+            Button("importer") {
+                isPresented = true
+            }
+            .fileImporter(isPresented: $isPresented,
+                          allowedContentTypes: [.plainText])
+            { result in
+                let file = try? result.get()
+                if file == nil {
+                    return
                 }
-            Button("Button2") { hello2() }
-        }.frame(minWidth: 300, minHeight: 300)
+                importer(file: file!.path)
+            }
+            
+            Button("exporter") {
+                isPresented = true
+            }
+            .fileExporter(isPresented: $isPresented,
+                          document: MyFileDocument(),
+                          contentType: .plainText,
+                          defaultFilename: "hello.txt")
+            { result in
+                let file = try? result.get()
+                if file == nil {
+                    return
+                }
+            }
+            
+            Button("user document"){
+                read_write_user_document()
+            }
+        }
+        .frame(minWidth: 300, minHeight: 400)
+        .border(.red)
+        .padding(5)
+        .lineSpacing(5)
     }
-
-    func hello2(){
-        //Sandbox: Documents, Downloads Folder
-
-        // https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide
-        let dir = FileManager.default.urls(for: .documentDirectory,
-                                           in: .userDomainMask).first!
-
-        let file = dir.appendingPathComponent("hello.txt")
-        hello(file: file.path)
-    }
-
-    func hello(file: String){
-        var fp = fopen(file, "a")
+    
+    //user selected for import, not working for iOS 15.7 on iPad mini 4?
+    //try to restore content from the Sandbox user document
+    //fileImporter is fileExporter on macOS 12.6.4 too ?
+    func importer(file: String){
+        let fp = fopen(file, "r")
+        var buffer = [CChar](repeating: 0, count: 128)
+        
         if fp == nil {
-            perror("fopen")
+            perror("fopen") //fopen: Operation not permitted
             return;
         }
-        fputs("hello1\n", fp)
-        fputs("hello2\n", fp)
-        fclose(fp)
-
-        fp = fopen(file, "r")
-        var buffer = [CChar](repeating: 0, count: 128)
+        
         while fgets(&buffer, Int32(buffer.count), fp) != nil {
-            print(String(cString: buffer), terminator: "")
+            content += String(cString: buffer)
+            print(content, terminator: "")
         }
         fclose(fp);
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+//user selected for export, ok
+struct MyFileDocument: FileDocument {
+    static var readableContentTypes = [UTType.plainText]
+    static var writableContentTypes = [UTType.plainText]
+    
+    var text = ""
+    
+    init(){
+        //populate all the content including the old
+        text += "hello 111 world 222 "
     }
+    
+    init(configuration: ReadConfiguration) throws {
+        //it can export
+        //but didn't read the old content for export
+        //try to restore content from the Sandbox user document
+        if let data = configuration.file.regularFileContents {
+            //text += String(decoding: data, as: UTF8.self)
+        }
+    }
+    
+    func fileWrapper(configuration: WriteConfiguration) throws
+            -> FileWrapper {
+        print(text)
+        let data = Data(text.utf8)
+        return FileWrapper(regularFileWithContents: data)
+    }
+}
+
+func read_write_user_document(){
+    // https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide
+    let dir = FileManager.default.urls(for: .documentDirectory,
+                                       in: .userDomainMask).first!
+    
+    let file = dir.appendingPathComponent("hello.txt")
+    
+    //write
+    var fp = fopen(file.path, "a")
+    if fp == nil {
+        perror("fopen")
+        return;
+    }
+    fputs("hello1\n", fp)
+    fputs("hello2\n", fp)
+    fclose(fp)
+    
+    //read
+    fp = fopen(file.path, "r")
+    if fp == nil {
+        perror("fopen")
+        return;
+    }
+    var buffer = [CChar](repeating: 0, count: 128)
+    while fgets(&buffer, Int32(buffer.count), fp) != nil {
+        print(String(cString: buffer), terminator: "")
+    }
+    fclose(fp);
 }
